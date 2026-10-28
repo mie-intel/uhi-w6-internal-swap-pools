@@ -296,7 +296,7 @@ contract InternalSwapPool is BaseHook {
 
         // Calculate a percentage of the swap amount to capture as the fee. For this hook example we
         // will take 1% of the value that would be received.
-        _depositFees(
+        depositFees(
             key,
             params.zeroForOne ? swapFee : 0,
             params.zeroForOne ? 0 : swapFee
@@ -323,22 +323,38 @@ contract InternalSwapPool is BaseHook {
      * @param _poolKey The PoolKey reference that will have fees distributed
      */
     function _distributeFees(PoolKey calldata _poolKey) internal {
-        // Get the amount of the native token available to donate
+        // Get the amount of both currencies available to donate. A currency is only
+        // donated if it individually meets the threshold.
         PoolId poolId = _poolKey.toId();
-        uint donateAmount = _poolFees[poolId].amount0;
+        uint donateAmount0 = _poolFees[poolId].amount0;
+        uint donateAmount1 = _poolFees[poolId].amount1;
+
+        if (donateAmount0 < DONATE_THRESHOLD_MIN) {
+            donateAmount0 = 0;
+        }
+
+        if (donateAmount1 < DONATE_THRESHOLD_MIN) {
+            donateAmount1 = 0;
+        }
 
         // Ensure that the collection has sufficient fees available
-        if (donateAmount < DONATE_THRESHOLD_MIN) {
+        if (donateAmount0 == 0 && donateAmount1 == 0) {
             return;
         }
 
         // Make our donation to the pool
-        BalanceDelta delta = poolManager.donate(_poolKey, donateAmount, 0, "");
+        BalanceDelta delta = poolManager.donate(
+            _poolKey,
+            donateAmount0,
+            donateAmount1,
+            ""
+        );
 
         // @todo We need to settle tokens here
 
         // Reduce our available fees
-        _poolFees[poolId].amount0 -= donateAmount;
+        _poolFees[poolId].amount0 -= donateAmount0;
+        _poolFees[poolId].amount1 -= donateAmount1;
     }
 
     /**
